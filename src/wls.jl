@@ -159,7 +159,7 @@ function wls_multivar(Y::Array{Float64, 2}, X::Array{Float64, 2}, w::Array{Float
     # see formulas (2) and (3) of Kang (2008)
     if(loglik)
 
-        ll = -0.5 * ((n+prior[2])*log.(sigma2_e) .- sum(log,w) .+ (rss0.+prior[1]*prior[2])./sigma2_e)
+        ll = -0.5 * ((n+prior_df)*log.(sigma2_e) .- sum(log,w) .+ (rss0.+prior[1]*prior[2])./sigma2_e)
         
         if(reml)
             # ell = ell + 0.5 * (p*log(2pi*sigma2) + logdetXtX - logdetXXtXX) # full log-likelihood including the constant terms;

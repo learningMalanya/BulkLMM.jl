@@ -1,6 +1,7 @@
 struct Results_by_bin
     idxs_by_bin::Array{Array{Bool, 1}, 1}
     LODs_by_bin::Array{Array{Float64, 2}, 1}
+    Effect_sizes_by_bin::Array{Array{Float64, 2}, 1}
     h2_taken::Array{Float64, 1};
 end
 
@@ -184,6 +185,13 @@ function weighted_liteqtl(Y0::Array{Float64, 2}, X0::Array{Float64, 2},
     wY0 = rowMultiply(Y0, sqrtw);
     wX0 = rowMultiply(X0, sqrtw);
 
+    ####### TO-TEST #######
+    ## Via QR:
+    # fct = qr(wX0);
+    # b = fct \ wY0;
+    b = wX0 \ wY0;
+    #######################
+
     if num_of_covar == 1
         wX0_intercept = reshape(wX0[:, 1], :, 1);
     else
@@ -197,7 +205,7 @@ function weighted_liteqtl(Y0::Array{Float64, 2}, X0::Array{Float64, 2},
 
     threaded_map!(r2lod, LOD, n; dims = dims); # results will be p-by-1, i.e. all LOD scores for the j-th trait and p markers
 
-    return LOD
+    return (LOD = LOD, B = b)
 end
 
 ## GridBulk helper functions:
@@ -249,7 +257,8 @@ function gridscan_by_bin(pheno::Array{Float64, 2}, geno::Array{Float64, 2},
 
     # Y_std = colStandardize(pheno);
     Y_std = pheno;
-
+    ##################################################################################
+    ## Step 1: Rotate to decorrelate the individuals: This is the same for all traits
     (Y0, X0, lambda0) = transform_rotation(Y_std, [covar geno], kinship; 
                                            addIntercept = addIntercept, decomp_scheme = decomp_scheme);
 
@@ -264,6 +273,9 @@ function gridscan_by_bin(pheno::Array{Float64, 2}, geno::Array{Float64, 2},
 
     X0_intercept = X0[:, 1:num_of_covar];
 
+    ##################################################################################
+    ## Step 2: Perform a quick scan of h2's (under null and by grid-search) for all traits
+    
     weights_each_h2 = map(x -> makeweights(x, lambda0), grid); # make weights evaluated on each h2 in grid
     ell_results = map(x -> wls_multivar(Y0, X0_intercept, x, prior; reml = reml).Ell, weights_each_h2);
     ell_results = reduce(vcat, ell_results);
@@ -278,32 +290,52 @@ function gridscan_by_bin(pheno::Array{Float64, 2}, geno::Array{Float64, 2},
     h2_taken = unique(values(idxs_sets));
     nbins = length(h2_taken);
 
+    ##################################################################################
+    ## Step 3: Distribute traits by h2 values into bins: Traits inside a bin share the same h2
+    
     blocking_idxs = distribute_traits_by_h2(idxs_sets, h2_taken, m, nbins);
+    # LOD scores for each bin
     results = Array{Array{Float64, 2}, 1}(undef, nbins);
+    # Effect sizes for each bin
+    effect_sizes_by_bin = Array{Array{Float64, 2}, 1}(undef, nbins);
+    
 
+    ##################################################################################
+    ## Step 4: Compute LOD scores for each bin of traits using the weighted LiteQTL approach
+    
     ## Threads.@threads for t in 1:nbins
     for t in 1:nbins
-        results[t] = weighted_liteqtl(Y0[:, blocking_idxs[t]], X0, lambda0, h2_taken[t]; 
+        out = weighted_liteqtl(Y0[:, blocking_idxs[t]], X0, lambda0, h2_taken[t]; 
                                       num_of_covar = num_of_covar);
+
+        results[t] = out.LOD;
+        effect_sizes_by_bin[t] = out.B;
+
     end
 
-    return Results_by_bin(blocking_idxs, results, h2_taken)
+    ##################################################################################
+    ## Final output: LOD scores for traits ordered by the order of bins
+    ## (Downstream to reorder the results by the original trait order)
+    return Results_by_bin(blocking_idxs, results, effect_sizes_by_bin, h2_taken)
     
 end
 
 function reorder_results(blocking_idxs::Array{Array{Bool, 1}, 1}, 
-                         lods_by_block::Array{Array{Float64, 2}, 1}, 
+                         lods_by_block::Array{Array{Float64, 2}, 1},
+                         effect_sizes_by_block::Array{Array{Float64, 2}, 1}, 
                          m::Int64, p::Int64)
     
     LOD = Array{Float64, 2}(undef, p, m);
+    B = Array{Float64, 2}(undef, p+1, m);
     
     
     for block in 1:length(blocking_idxs)
         idxs_curr_block = blocking_idxs[block];
         LOD[:, idxs_curr_block] = lods_by_block[block];
+        B[:, idxs_curr_block] = effect_sizes_by_block[block];
     end
     
-    return LOD
+    return (LOD = LOD, B = B)
     
 end
 

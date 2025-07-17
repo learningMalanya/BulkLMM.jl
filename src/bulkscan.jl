@@ -375,12 +375,17 @@ function bulkscan_null_grid(Y::Array{Float64, 2}, G::Array{Float64, 2}, Covar::A
                                      reml = reml,
                                      decomp_scheme = decomp_scheme);
     
-    LOD_grid = reorder_results(results_by_bin.idxs_by_bin, results_by_bin.LODs_by_bin, m, p);
+    out = reorder_results(results_by_bin.idxs_by_bin, 
+                               results_by_bin.LODs_by_bin, 
+                               results_by_bin.Effect_sizes_by_bin,
+                               m, p);
+    LOD_grid = out.LOD;
+    B_grid = out.B;
 
     est_h2_per_y = get_h2_distribution(results_by_bin.h2_taken, results_by_bin.idxs_by_bin);
 
 
-    return (L = LOD_grid, h2_null_list = est_h2_per_y)
+    return (L = LOD_grid, B = B_grid, h2_null_list = est_h2_per_y)
 
 end
 

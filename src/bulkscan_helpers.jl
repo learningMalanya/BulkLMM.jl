@@ -55,6 +55,10 @@ function computeR_LMM(wY::Array{Float64, 2}, wX::Array{Float64, 2}, wIntercept::
     norm_Y = mapslices(x -> norm(x), Y00, dims = 1) |> vec;
     norm_X = mapslices(x -> norm(x), X00, dims = 1) |> vec;
 
+    # TODO: Check if this makes sense to do; if not, remove
+    replace!(norm_Y, 0 => 1.0)
+    replace!(norm_X, 0 => 1.0)
+
     colDivide!(Y00, norm_Y);
     colDivide!(X00, norm_X);
 

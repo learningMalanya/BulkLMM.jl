@@ -85,6 +85,8 @@ function bulkscan(Y::Array{Float64, 2}, G::Array{Float64, 2}, K::Array{Float64, 
                   weights::Union{Missing, Array{Float64, 1}} = missing,
                   prior_variance::Float64 = 1.0, prior_sample_size::Float64 = 0.0,
                   reml::Bool = false, optim_interval::Int64 = 1,
+                  # sample proportion of subset of traits to perform exact optimization of h2 - for proposing h2 grid values:
+                  subset_size_for_h2_scale::Float64 = 0.1,
                   # option for kinship decomposition scheme:
                   decomp_scheme::String = "eigen",
                   # option for returning p-values results:
@@ -104,7 +106,7 @@ function bulkscan(Y::Array{Float64, 2}, G::Array{Float64, 2}, K::Array{Float64, 
                     addIntercept = false, 
                     weights = weights,
                     prior_variance = prior_variance, prior_sample_size = prior_sample_size,
-                    reml = reml, optim_interval = optim_interval,
+                    reml = reml, optim_interval = optim_interval, subset_size_for_h2_scale = subset_size_for_h2_scale,
                     decomp_scheme = decomp_scheme, output_pvals = output_pvals, chisq_df = chisq_df)
 
 
@@ -118,6 +120,8 @@ function bulkscan(Y::Array{Float64, 2}, G::Array{Float64, 2}, Covar::Array{Float
                   weights::Union{Missing, Array{Float64, 1}} = missing,
                   prior_variance::Float64 = 1.0, prior_sample_size::Float64 = 0.0,
                   reml::Bool = false, optim_interval::Int64 = 1,
+                  # sample proportion of subset of traits to perform exact optimization of h2 - for proposing h2 grid values:
+                  subset_size_for_h2_scale::Float64 = 0.1,
                   # option for kinship decomposition scheme:
                   decomp_scheme::String = "eigen",
                   # option for returning p-values results:
@@ -134,21 +138,45 @@ function bulkscan(Y::Array{Float64, 2}, G::Array{Float64, 2}, Covar::Array{Float
     end
 
     if method == "null-grid"
+        # Create a subset of traits to perform exact optimization of h2 for proposing h2 grid values:
+        subset_traits = rand(1:size(Y, 2), max(2, Int(floor(size(Y, 2)*subset_size_for_h2_scale))));
+        out_subset_null_exact = bulkscan(Y[:, subset_traits], G, Covar, K; 
+                                         method = "null-exact", 
+                                         nb = min(nb, length(subset_traits)), nt_blas = nt_blas,
+                                         addIntercept = addIntercept, 
+                                         weights = weights,
+                                         prior_variance = prior_variance, prior_sample_size = prior_sample_size,
+                                         reml = reml, optim_interval = optim_interval, 
+                                         decomp_scheme = decomp_scheme);
+
+        h2_grid = quantile(out_subset_null_exact.h2_null_list, h2_grid);
         bulkscan_results = bulkscan_null_grid(Y, G, Covar, K, h2_grid; 
-                                  weights = weights,
-                                  addIntercept = addIntercept,
-                                  prior_variance = prior_variance, prior_sample_size = prior_sample_size,
-                                  reml = reml, 
-                                  decomp_scheme = decomp_scheme);
+                                              weights = weights,
+                                              addIntercept = addIntercept,
+                                              prior_variance = prior_variance, prior_sample_size = prior_sample_size,
+                                              reml = reml, 
+                                              decomp_scheme = decomp_scheme);
     end
 
     if method == "alt-grid"
+        # Create a subset of traits to perform exact optimization of h2 for proposing h2 grid values:
+        subset_traits = rand(1:size(Y, 2), max(2, Int(floor(size(Y, 2)*subset_size_for_h2_scale))));
+        out_subset_null_exact = bulkscan(Y[:, subset_traits], G, Covar, K; 
+                                         method = "null-exact", 
+                                         nb = min(nb, length(subset_traits)), nt_blas = nt_blas,
+                                         addIntercept = addIntercept, 
+                                         weights = weights,
+                                         prior_variance = prior_variance, prior_sample_size = prior_sample_size,
+                                         reml = reml, optim_interval = optim_interval, 
+                                         decomp_scheme = decomp_scheme);
+
+        h2_grid = quantile(out_subset_null_exact.h2_null_list, h2_grid);
         bulkscan_results = bulkscan_alt_grid(Y, G, Covar, K, h2_grid; 
-                                  weights = weights,
-                                  addIntercept = addIntercept,
-                                  prior_variance = prior_variance, prior_sample_size = prior_sample_size,
-                                  reml = reml,
-                                  decomp_scheme = decomp_scheme);
+                                             weights = weights,
+                                             addIntercept = addIntercept,
+                                             prior_variance = prior_variance, prior_sample_size = prior_sample_size,
+                                             reml = reml,
+                                             decomp_scheme = decomp_scheme);
     end
 
     if output_pvals
@@ -376,9 +404,9 @@ function bulkscan_null_grid(Y::Array{Float64, 2}, G::Array{Float64, 2}, Covar::A
                                      decomp_scheme = decomp_scheme);
     
     out = reorder_results(results_by_bin.idxs_by_bin, 
-                               results_by_bin.LODs_by_bin, 
-                               results_by_bin.Effect_sizes_by_bin,
-                               m, p);
+                          results_by_bin.LODs_by_bin, 
+                          results_by_bin.Effect_sizes_by_bin,
+                          m, p);
     LOD_grid = out.LOD;
     B_grid = out.B;
 
@@ -497,7 +525,7 @@ function bulkscan_alt_grid(Y::Array{Float64, 2}, G::Array{Float64, 2},
 
     prior = [prior_variance, prior_sample_size];
     ## initializing outputs:
-    logLR = weighted_liteqtl(Y0, X0, lambda0, hsq_list[1]; num_of_covar = num_of_covar);
+    logLR = weighted_liteqtl(Y0, X0, lambda0, hsq_list[1]; num_of_covar = num_of_covar).LOD;
     logLR = logLR .* log(10);
     weights_1 = makeweights(hsq_list[1], lambda0);
     logL0 = wls_multivar(Y0, X0_base, weights_1, prior; reml = reml).Ell;
@@ -512,7 +540,7 @@ function bulkscan_alt_grid(Y::Array{Float64, 2}, G::Array{Float64, 2},
 
     for h2 in hsq_list[2:end]
 
-        logLR_k = weighted_liteqtl(Y0, X0, lambda0, h2) .* log(10);
+        logLR_k = weighted_liteqtl(Y0, X0, lambda0, h2).LOD .* log(10);
         weights_k = makeweights(h2, lambda0);
         logL0_k = wls_multivar(Y0, X0_base, weights_k, prior; reml = reml).Ell; 
         logL1_k = logLR_k .+ repeat(logL0_k, p);

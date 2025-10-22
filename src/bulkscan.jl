@@ -86,7 +86,7 @@ function bulkscan(Y::Array{Float64, 2}, G::Array{Float64, 2}, K::Array{Float64, 
                   prior_variance::Float64 = 1.0, prior_sample_size::Float64 = 0.0,
                   reml::Bool = false, optim_interval::Int64 = 1,
                   # sample proportion of subset of traits to perform exact optimization of h2 - for proposing h2 grid values:
-                  subset_size_for_h2_scale::Float64 = 0.1,
+                  subset_size_for_h2_scale::Float64 = 0.0,
                   # option for kinship decomposition scheme:
                   decomp_scheme::String = "eigen",
                   # option for returning p-values results:

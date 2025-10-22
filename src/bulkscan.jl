@@ -121,7 +121,7 @@ function bulkscan(Y::Array{Float64, 2}, G::Array{Float64, 2}, Covar::Array{Float
                   prior_variance::Float64 = 1.0, prior_sample_size::Float64 = 0.0,
                   reml::Bool = false, optim_interval::Int64 = 1,
                   # sample proportion of subset of traits to perform exact optimization of h2 - for proposing h2 grid values:
-                  subset_size_for_h2_scale::Float64 = 0.1,
+                  subset_size_for_h2_scale::Float64 = 0.0,
                   # option for kinship decomposition scheme:
                   decomp_scheme::String = "eigen",
                   # option for returning p-values results:
@@ -138,18 +138,20 @@ function bulkscan(Y::Array{Float64, 2}, G::Array{Float64, 2}, Covar::Array{Float
     end
 
     if method == "null-grid"
-        # Create a subset of traits to perform exact optimization of h2 for proposing h2 grid values:
-        subset_traits = rand(1:size(Y, 2), max(2, Int(floor(size(Y, 2)*subset_size_for_h2_scale))));
-        out_subset_null_exact = bulkscan(Y[:, subset_traits], G, Covar, K; 
-                                         method = "null-exact", 
-                                         nb = min(nb, length(subset_traits)), nt_blas = nt_blas,
-                                         addIntercept = addIntercept, 
-                                         weights = weights,
-                                         prior_variance = prior_variance, prior_sample_size = prior_sample_size,
-                                         reml = reml, optim_interval = optim_interval, 
-                                         decomp_scheme = decomp_scheme);
+        if subset_size_for_h2_scale !== 0.0
+            # Create a subset of traits to perform exact optimization of h2 for proposing h2 grid values:
+            subset_traits = rand(1:size(Y, 2), max(2, Int(floor(size(Y, 2)*subset_size_for_h2_scale))));
+            out_subset_null_exact = bulkscan(Y[:, subset_traits], G, Covar, K; 
+                                            method = "null-exact", 
+                                            nb = min(nb, length(subset_traits)), nt_blas = nt_blas,
+                                            addIntercept = addIntercept, 
+                                            weights = weights,
+                                            prior_variance = prior_variance, prior_sample_size = prior_sample_size,
+                                            reml = reml, optim_interval = optim_interval, 
+                                            decomp_scheme = decomp_scheme);
 
-        h2_grid = quantile(out_subset_null_exact.h2_null_list, h2_grid);
+            h2_grid = quantile(out_subset_null_exact.h2_null_list, h2_grid);
+        end
         bulkscan_results = bulkscan_null_grid(Y, G, Covar, K, h2_grid; 
                                               weights = weights,
                                               addIntercept = addIntercept,
@@ -159,18 +161,20 @@ function bulkscan(Y::Array{Float64, 2}, G::Array{Float64, 2}, Covar::Array{Float
     end
 
     if method == "alt-grid"
-        # Create a subset of traits to perform exact optimization of h2 for proposing h2 grid values:
-        subset_traits = rand(1:size(Y, 2), max(2, Int(floor(size(Y, 2)*subset_size_for_h2_scale))));
-        out_subset_null_exact = bulkscan(Y[:, subset_traits], G, Covar, K; 
-                                         method = "null-exact", 
-                                         nb = min(nb, length(subset_traits)), nt_blas = nt_blas,
-                                         addIntercept = addIntercept, 
-                                         weights = weights,
-                                         prior_variance = prior_variance, prior_sample_size = prior_sample_size,
-                                         reml = reml, optim_interval = optim_interval, 
-                                         decomp_scheme = decomp_scheme);
+        if subset_size_for_h2_scale !== 0.0
+            # Create a subset of traits to perform exact optimization of h2 for proposing h2 grid values:
+            subset_traits = rand(1:size(Y, 2), max(2, Int(floor(size(Y, 2)*subset_size_for_h2_scale))));
+            out_subset_null_exact = bulkscan(Y[:, subset_traits], G, Covar, K; 
+                                            method = "null-exact", 
+                                            nb = min(nb, length(subset_traits)), nt_blas = nt_blas,
+                                            addIntercept = addIntercept, 
+                                            weights = weights,
+                                            prior_variance = prior_variance, prior_sample_size = prior_sample_size,
+                                            reml = reml, optim_interval = optim_interval, 
+                                            decomp_scheme = decomp_scheme);
 
-        h2_grid = quantile(out_subset_null_exact.h2_null_list, h2_grid);
+            h2_grid = quantile(out_subset_null_exact.h2_null_list, h2_grid);
+        end
         bulkscan_results = bulkscan_alt_grid(Y, G, Covar, K, h2_grid; 
                                              weights = weights,
                                              addIntercept = addIntercept,

@@ -47,22 +47,23 @@ Inputs are rotated, re-weighted.
 """
 function computeR_LMM(wY::Array{Float64, 2}, wX::Array{Float64, 2}, wIntercept::Array{Float64, 2})
 
-    # exclude the effect of (rotated) intercept (idea is similar as centering data in the linear model case)
+    # Exclude the effect of (rotated) intercept (idea is similar as centering data in the linear model case)
     Y00 = resid(wY, wIntercept);
     X00 = resid(wX, wIntercept);
 
-    # standardize the response and covariates by dividing by their norms
+    # Standardize the response and covariates by dividing by their norms
     norm_Y = mapslices(x -> norm(x), Y00, dims = 1) |> vec;
     norm_X = mapslices(x -> norm(x), X00, dims = 1) |> vec;
 
-    # TODO: Check if this makes sense to do; if not, remove
     replace!(norm_Y, 0 => 1.0)
     replace!(norm_X, 0 => 1.0)
 
     colDivide!(Y00, norm_Y);
     colDivide!(X00, norm_X);
 
-    R = X00' * Y00; # p-by-m matrix
+    # Matrix of correlation coefficients between the trait and all markers
+    R = X00' * Y00;
+    print(R)
 
     return R
 
@@ -132,25 +133,39 @@ Assumes the heritabilities only differ by traits but remain the same across all 
 function univar_liteqtl(y0_j::AbstractArray{Float64, 1}, X0_intercept::AbstractArray{Float64, 2}, 
                         X0_covar::AbstractArray{Float64, 2}, lambda0::AbstractArray{Float64, 1}; 
                         prior_variance = 0.0, prior_sample_size = 0.0,
-                        reml::Bool = false, optim_interval::Int64 = 1)
+                        reml::Bool = false, optim_interval::Int64 = 1
+                        )
 
     n = size(y0_j, 1);
     y0 = reshape(y0_j, :, 1);
 
-    # estimate the heritability from the null model and apply it to the reweighting of all markers;
+    # Estimate the heritability from the null model
     vc = fitlmm(y0, X0_intercept, lambda0, [prior_variance, prior_sample_size]; 
                 reml = reml, optim_interval = optim_interval);
+    # Construct weights to adjust for heteroskedasticity due to heritability
     sqrtw = sqrt.(abs.(makeweights(vc.h2, lambda0)));
 
-    # re-weight the data; then in theory, the observations are homoskedestic and independent.
+    # Re-weight the data: final transformed data wy0 are homoskedestic and independent
     wy0 = rowMultiply(y0, sqrtw);
     wX0_intercept = rowMultiply(X0_intercept, sqrtw);
     wX0_covar = rowMultiply(X0_covar, sqrtw);
 
+    # Matrix of correlation coefficients between the trait and all markers
     R = computeR_LMM(wy0, wX0_covar, wX0_intercept);
+
+    # # If returning of fixed effects is requested:
+    # if fixed_effects
+    #     B = copy(R);
+    #     threaded_map!(r2lod, R, n; dims = 2);
+    #     return (R = R, B = B, h2 = vc.h2);
+    # end
+
+
+    # Otherwise, just return test statistics (LOD scores) and null heritabilities:
+    B = copy(R);
     threaded_map!(r2lod, R, n; dims = 2);
 
-    return (R = R, h2 = vc.h2); # results will be p-by-1, i.e. all LOD scores for the j-th trait and p markers
+    return (B = B, R = R, h2 = vc.h2); # results will be p-by-1, i.e. all LOD scores for the j-th trait and p markers
 
 end
 
@@ -307,13 +322,14 @@ function gridscan_by_bin(pheno::Array{Float64, 2}, geno::Array{Float64, 2},
     ##################################################################################
     ## Step 4: Compute LOD scores for each bin of traits using the weighted LiteQTL approach
     
-    ## Threads.@threads for t in 1:nbins
     for t in 1:nbins
         out = weighted_liteqtl(Y0[:, blocking_idxs[t]], X0, lambda0, h2_taken[t]; 
                                       num_of_covar = num_of_covar);
 
         results[t] = out.LOD;
-        effect_sizes_by_bin[t] = out.B;
+        selected_effects = vcat(1, num_of_covar+1:size(out.B, 1)) # baseline (1) + marker (num_of_covar+1:end) effects
+        effect_sizes_by_bin[t] = out.B[selected_effects, :]; # exclude the covariate effects
+        # print(size(effect_sizes_by_bin[t]))
 
     end
 

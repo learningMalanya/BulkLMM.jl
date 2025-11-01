@@ -218,29 +218,8 @@ outcome matrix can be multivariate in which case the function returns
 the residual matrix of the same size as the outcome matrix.
 
 """
-function resid(y::Array{Float64, 2}, X::Array{Float64, 2}; method = "qr")
-
-    # least squares solution
-    # faster but numerically less stable
-    if(method=="cholesky")
-        b = (X'X)\(X'y)
-    end
-
-    # slower but numerically more stable
-    if(method=="qr")
-    fct = qr(X)
-    b = fct\y
-    end
-
-    # estimate yy and calculate rss
-    yhat = X*b
-    resid = y-yhat
-
-    return resid
-
-end
-
-function resid(y::Array{Float64, 2}, X::AbstractArray{Float64, 1}; method = "qr")
+function resid(y::Array{Float64, 2}, X::Union{Array{Float64, 1}, Array{Float64, 2}}; 
+               method::String = "qr")
 
     # least squares solution
     # faster but numerically less stable

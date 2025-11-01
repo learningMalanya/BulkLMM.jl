@@ -218,11 +218,13 @@ Calculates the LOD scores for all pairs of traits and markers, by a (multi-threa
 
 """
 function bulkscan_null(Y::Array{Float64, 2}, G::Array{Float64, 2}, K::Array{Float64, 2};
+                       fixed_effects::Bool = true,
                        nb::Int64 = Threads.nthreads(), 
                        nt_blas::Int64 = 1, 
                        weights::Union{Missing, Array{Float64, 1}} = missing,
                        prior_variance::Float64 = 1.0, prior_sample_size::Float64 = 0.0,
-                       reml::Bool = false, optim_interval::Int64 = 1,
+                       reml::Bool = false, 
+                       optim_interval::Int64 = 1,
                        decomp_scheme::String = "eigen")
 
     n = size(Y, 1);
@@ -231,6 +233,7 @@ function bulkscan_null(Y::Array{Float64, 2}, G::Array{Float64, 2}, K::Array{Floa
     intercept = ones(n, 1);
 
     return bulkscan_null(Y, G, intercept, K; 
+                         fixed_effects = fixed_effects,
                          nb = nb, nt_blas = nt_blas, 
                          # key step: avoid adding the intercept twice
                          addIntercept = false, 
@@ -243,6 +246,7 @@ end
 ### Modeling covariates version
 function bulkscan_null(Y::Array{Float64, 2}, G::Array{Float64, 2}, 
                        Covar::Array{Float64, 2}, K::Array{Float64, 2};
+                       fixed_effects::Bool = true,
                        nb::Int64 = Threads.nthreads(), nt_blas::Int64 = 1, 
                        addIntercept::Bool = true, 
                        weights::Union{Missing, Array{Float64, 1}} = missing,
@@ -294,37 +298,52 @@ function bulkscan_null(Y::Array{Float64, 2}, G::Array{Float64, 2},
     # distribute the `m` traits equally to every block
     (len, rem) = divrem(m, nb);
 
-    results = Array{Array{Float64, 2}, 1}(undef, nb);
-    h2_null_list = zeros(m);
+    # Initialize placeholders for results of all blocks of traits:
+    results = Array{Array{Float64, 2}, 1}(undef, nb);      # For storing LOD scores
+    beta_results = Array{Array{Float64, 2}, 1}(undef, nb); # For storing effect sizes
+    h2_null_list = zeros(m);                               # For storing null heritabilities
 
     Threads.@threads for t = 1:nb # so the N blocks will share the (nthreads - N) BLAS threads
 
-    lods_currBlock = Array{Float64, 2}(undef, p, len);
+        # Initialize placeholders for results of the traits in the current block:
+        ## Matrix of effect sizes
+        beta_currBlock = Array{Float64, 2}(undef, p, len);
+        ## Matrix of LOD scores
+        lods_currBlock = Array{Float64, 2}(undef, p, len);
+        
 
-    # process every trait in the block by a @simd loop 
-    @simd for i = 1:len
-        j = i+(t-1)*len;
+        # process every trait in the block by a @simd loop 
+        @simd for i = 1:len
+            j = i+(t-1)*len;
 
-        outputs = univar_liteqtl(Y0[:, j], X0_intercept, X0_covar, lambda0; 
-                                 prior_variance = prior_variance, prior_sample_size = prior_sample_size,
-                                 reml = reml, optim_interval = optim_interval);
+            outputs = univar_liteqtl(Y0[:, j], X0_intercept, X0_covar, lambda0; 
+                                    prior_variance = prior_variance, prior_sample_size = prior_sample_size,
+                                    reml = reml, optim_interval = optim_interval);
 
-        @inbounds lods_currBlock[:, i] = outputs.R;
-        @inbounds h2_null_list[j] = outputs.h2
-    end
+            @inbounds beta_currBlock[:, i] = outputs.B;
+            @inbounds lods_currBlock[:, i] = outputs.R;
+            @inbounds h2_null_list[j] = outputs.h2
+        end
 
+        beta_results[t] = beta_currBlock;
         results[t] = lods_currBlock;
 
     end
 
+    B_all = reduce(hcat, beta_results);
     LODs_all = reduce(hcat, results);
 
     # if no remainder as the result of blocking, no remaining traits need to be scanned
     if rem == 0
+        if fixed_effects
+            return (B = B_all, L = LODs_all, h2_null_list = h2_null_list)
+        end
+
         return (L = LODs_all, h2_null_list = h2_null_list)
     end
 
     # else, process up the remaining traits
+    beta_remBlock = Array{Float64, 2}(undef, p, rem);
     lods_remBlock = Array{Float64, 2}(undef, p, rem);
 
     for i in 1:rem
@@ -336,11 +355,17 @@ function bulkscan_null(Y::Array{Float64, 2}, G::Array{Float64, 2},
                                  reml = reml, optim_interval = optim_interval);
         
         lods_remBlock[:, i] = outputs.R;
+        beta_remBlock[:, i] = outputs.B;
         h2_null_list[j] = outputs.h2;
 
     end
 
+    B_all = hcat(B_all, beta_remBlock);
     LODs_all = hcat(LODs_all, lods_remBlock);
+
+    if fixed_effects
+        return (B = B_all, L = LODs_all, h2_null_list = h2_null_list)
+    end
 
     return (L = LODs_all, h2_null_list = h2_null_list)
 end

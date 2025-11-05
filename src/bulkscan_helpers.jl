@@ -354,9 +354,8 @@ tmax!(max, toCompare)
 Does element-wise comparisons of two 2d Arrays and keep the larger elements in-place. 
 
 # Arguments
-- max = 2d Array of Float; matrix of current maximum values
-- toCompare = 2d Array of Flopat; matrix of values to compare with the current maximum values
-- 
+- currMax = 2d Array of Float; matrix of current maximum values
+- toCompare = 2d Array of Float; matrix of values to compare with the current maximum values
 
 # Value
 
@@ -364,23 +363,27 @@ Nothing; does in-place maximizations.
 
 # Notes:
 
-Will modify input matrix `max` by a parallelized loop; uses @tturbo in the package `LoopVectorization.jl`
+Updates optimal values in `currMax` in-place, in a threaded loop.
 
 """
-function tmax!(max::Array{Float64, 2}, toCompare::Array{Float64, 2},
-               hsq_panel::Array{Float64, 2}, hsq_panel_counter::Array{Int64, 2},
-               hsq_list::Array{Float64, 1})
+function tmax!(currMax::Array{Float64, 2}, toCompare::Array{Float64, 2},
+               h2_panel::Array{Float64, 2}, h2_panel_counter::Array{Int64, 2},
+               h2_list::Array{Float64, 1})
     
-    (p, m) = size(max);
+    (p, m) = size(currMax);
     
-    Threads.@threads for j in 1:m
-        for i in 1:p
+    Threads.@threads for j in 1:m # Multiprocessing over traits over threads
+        for i in 1:p # Loop over markers
             
-            # change inputs in-place only when condition is met (the coordinate of LOD is higher on the current h2 value)
-            if (max[i, j] < toCompare[i, j])
-                max[i, j] = toCompare[i, j];
-                hsq_panel_counter[i, j] = hsq_panel_counter[i, j]+1;
-                hsq_panel[i, j] = hsq_list[hsq_panel_counter[i, j]];
+            # Update each LOD score in-place, if current LOD is smaller:
+            if (currMax[i, j] < toCompare[i, j])
+
+                # Update new maximum LOD score:
+                currMax[i, j] = toCompare[i, j];
+
+                # Record the new optimal h2 value:
+                h2_panel_counter[i, j] = h2_panel_counter[i, j]+1; # Index of the h2 value in h2_list
+                h2_panel[i, j] = h2_list[h2_panel_counter[i, j]]; # Update the optimal h2 value from indices
             end
 
             # do nothing if not.

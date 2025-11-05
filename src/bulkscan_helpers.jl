@@ -63,7 +63,6 @@ function computeR_LMM(wY::Array{Float64, 2}, wX::Array{Float64, 2}, wIntercept::
 
     # Matrix of correlation coefficients between the trait and all markers
     R = X00' * Y00;
-    print(R)
 
     return R
 
@@ -153,19 +152,14 @@ function univar_liteqtl(y0_j::AbstractArray{Float64, 1}, X0_intercept::AbstractA
     # Matrix of correlation coefficients between the trait and all markers
     R = computeR_LMM(wy0, wX0_covar, wX0_intercept);
 
-    # # If returning of fixed effects is requested:
-    # if fixed_effects
-    #     B = copy(R);
-    #     threaded_map!(r2lod, R, n; dims = 2);
-    #     return (R = R, B = B, h2 = vc.h2);
-    # end
+    # Estimate effect sizes for baseline covariates and markers
+    wX0_covar_intercept = hcat(wX0_intercept, wX0_covar);
+    B = wX0_covar_intercept\wy0; # effect sizes for all markers + intercept
 
-
-    # Otherwise, just return test statistics (LOD scores) and null heritabilities:
-    B = copy(R);
     threaded_map!(r2lod, R, n; dims = 2);
 
-    return (B = B, R = R, h2 = vc.h2); # results will be p-by-1, i.e. all LOD scores for the j-th trait and p markers
+    # Return LOD scores, effect sizes, and heritability estimate
+    return (B = B, R = R, h2 = vc.h2);
 
 end
 
@@ -203,13 +197,7 @@ function weighted_liteqtl(Y0::Array{Float64, 2}, X0::Array{Float64, 2},
 
     wY0 = rowMultiply(Y0, sqrtw);
     wX0 = rowMultiply(X0, sqrtw);
-
-    ####### TO-TEST #######
-    ## Via QR:
-    # fct = qr(wX0);
-    # b = fct \ wY0;
     b = wX0 \ wY0;
-    #######################
 
     if num_of_covar == 1
         wX0_intercept = reshape(wX0[:, 1], :, 1);

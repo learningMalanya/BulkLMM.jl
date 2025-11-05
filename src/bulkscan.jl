@@ -320,7 +320,7 @@ function bulkscan_null(Y::Array{Float64, 2}, G::Array{Float64, 2},
                                     prior_variance = prior_variance, prior_sample_size = prior_sample_size,
                                     reml = reml, optim_interval = optim_interval);
 
-            @inbounds beta_currBlock[:, i] = outputs.B;
+            @inbounds beta_currBlock[:, i] = outputs.B[2:end];
             @inbounds lods_currBlock[:, i] = outputs.R;
             @inbounds h2_null_list[j] = outputs.h2
         end
@@ -355,7 +355,7 @@ function bulkscan_null(Y::Array{Float64, 2}, G::Array{Float64, 2},
                                  reml = reml, optim_interval = optim_interval);
         
         lods_remBlock[:, i] = outputs.R;
-        beta_remBlock[:, i] = outputs.B;
+        beta_remBlock[:, i] = outputs.B[2:end];
         h2_null_list[j] = outputs.h2;
 
     end
@@ -377,6 +377,7 @@ end
 ###########################################################
 function bulkscan_null_grid(Y::Array{Float64, 2}, G::Array{Float64, 2}, 
                             K::Array{Float64, 2}, grid_list::Array{Float64, 1};
+                            fixed_effects::Bool = true,
                             weights::Union{Missing, Array{Float64, 1}} = missing, 
                             prior_variance::Float64 = 1.0, prior_sample_size::Float64 = 0.0, 
                             reml::Bool = false,
@@ -387,6 +388,7 @@ function bulkscan_null_grid(Y::Array{Float64, 2}, G::Array{Float64, 2},
     intercept = ones(n, 1);
 
     return bulkscan_null_grid(Y, G, intercept, K, grid_list; 
+                              fixed_effects = fixed_effects,
                               weights = weights,
                               addIntercept = false,
                               prior_variance = prior_variance, prior_sample_size = prior_sample_size,
@@ -396,6 +398,7 @@ function bulkscan_null_grid(Y::Array{Float64, 2}, G::Array{Float64, 2},
 end
 function bulkscan_null_grid(Y::Array{Float64, 2}, G::Array{Float64, 2}, Covar::Array{Float64, 2}, 
                             K::Array{Float64, 2}, grid_list::Array{Float64, 1};
+                            fixed_effects::Bool = true,
                             weights::Union{Missing, Array{Float64, 1}} = missing, 
                             addIntercept::Bool = true,
                             prior_variance::Float64 = 1.0, prior_sample_size::Float64 = 0.0, 
@@ -441,8 +444,11 @@ function bulkscan_null_grid(Y::Array{Float64, 2}, G::Array{Float64, 2}, Covar::A
 
     est_h2_per_y = get_h2_distribution(results_by_bin.h2_taken, results_by_bin.idxs_by_bin);
 
+    if fixed_effects
+        return (B = B_grid, L = LOD_grid, h2_null_list = est_h2_per_y)
+    end
 
-    return (L = LOD_grid, B = B_grid, h2_null_list = est_h2_per_y)
+    return (L = LOD_grid, h2_null_list = est_h2_per_y)
 
 end
 
@@ -489,6 +495,7 @@ Maximal LOD scores are taken independently for each pair of trait and marker; wh
 """
 function bulkscan_alt_grid(Y::Array{Float64, 2}, G::Array{Float64, 2}, K::Array{Float64, 2}, 
                            hsq_list::Array{Float64, 1};
+                           fixed_effects::Bool = true,
                            reml::Bool = false,
                            prior_variance::Float64 = 1.0, prior_sample_size::Float64 = 0.0, 
                            weights::Union{Missing, Array{Float64, 1}} = missing,
@@ -498,6 +505,7 @@ function bulkscan_alt_grid(Y::Array{Float64, 2}, G::Array{Float64, 2}, K::Array{
     intercept = ones(n, 1);
 
     return bulkscan_alt_grid(Y, G, intercept, K, hsq_list; 
+                             fixed_effects = fixed_effects,
                              reml = reml, 
                              prior_variance = prior_variance, prior_sample_size = prior_sample_size, 
                              weights = weights, addIntercept = false, decomp_scheme = decomp_scheme);
@@ -506,6 +514,7 @@ end
 
 function bulkscan_alt_grid(Y::Array{Float64, 2}, G::Array{Float64, 2}, 
                            Covar::Array{Float64, 2}, K::Array{Float64, 2}, hsq_list::Array{Float64, 1};
+                           fixed_effects::Bool = true,
                            reml::Bool = false,
                            prior_variance::Float64 = 1.0, prior_sample_size::Float64 = 0.0, 
                            weights::Union{Missing, Array{Float64, 1}} = missing, 
@@ -553,7 +562,8 @@ function bulkscan_alt_grid(Y::Array{Float64, 2}, G::Array{Float64, 2},
     end
 
     prior = [prior_variance, prior_sample_size];
-    ## initializing outputs:
+
+    # Initializing the first iteration of the algorithm on the first h2 value in the grid:
     logLR = weighted_liteqtl(Y0, X0, lambda0, hsq_list[1]; num_of_covar = num_of_covar).LOD;
     logLR = logLR .* log(10);
     weights_1 = makeweights(hsq_list[1], lambda0);
@@ -567,9 +577,13 @@ function bulkscan_alt_grid(Y::Array{Float64, 2}, G::Array{Float64, 2},
     h2_panel = ones(p, m) .* hsq_list[1]; 
     h2_panel_counter = Int.(ones(p, m));
 
+    # Step 1: Obtain maximum loglikelihood values under alternative model, optimized over h2 grid:
     for h2 in hsq_list[2:end]
 
-        logLR_k = weighted_liteqtl(Y0, X0, lambda0, h2).LOD .* log(10);
+        # Use the LiteQTL (matrix multiplication) approach to compute LOD fastly
+        # (based on a given h2 value in the grid)
+        logLR_k = weighted_liteqtl(Y0, X0, lambda0, h2).LOD .* log(10); # Convert LOD to loglik ratio
+        # Then, we need to recover 
         weights_k = makeweights(h2, lambda0);
         logL0_k = wls_multivar(Y0, X0_base, weights_k, prior; reml = reml).Ell; 
         logL1_k = logLR_k .+ repeat(logL0_k, p);
@@ -580,7 +594,10 @@ function bulkscan_alt_grid(Y::Array{Float64, 2}, G::Array{Float64, 2},
         tmax!(logL1, logL1_k, h2_panel, h2_panel_counter, hsq_list);
     end
 
+    # Step 2: Obtain maximum loglikelihood values under null model, optimized over h2 grid:
     logL0_optimum = mapslices(x -> maximum(x), logL0_all_h2, dims = 1) |> x -> repeat(x, p);
+
+    # Step 3: Calculate LOD scores:
     L = (logL1 .- logL0_optimum) ./ log(10);
 
     return (L = L, h2_panel = h2_panel);

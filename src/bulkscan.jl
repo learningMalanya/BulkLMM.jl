@@ -364,7 +364,8 @@ function bulkscan_null(Y::Array{Float64, 2}, G::Array{Float64, 2},
     LODs_all = hcat(LODs_all, lods_remBlock);
 
     if fixed_effects
-        return (B = B_all, L = LODs_all, h2_null_list = h2_null_list)
+        SE = map((a, b) -> calc_std_err(a, b), LODs_all, B_all)
+        return (B = B_all, SE = SE, L = LODs_all, h2_null_list = h2_null_list)
     end
 
     return (L = LODs_all, h2_null_list = h2_null_list)
@@ -445,7 +446,8 @@ function bulkscan_null_grid(Y::Array{Float64, 2}, G::Array{Float64, 2}, Covar::A
     est_h2_per_y = get_h2_distribution(results_by_bin.h2_taken, results_by_bin.idxs_by_bin);
 
     if fixed_effects
-        return (B = B_grid, L = LOD_grid, h2_null_list = est_h2_per_y)
+        SE_grid = map((a, b) -> calc_std_err(a, b), LOD, B_grid)
+        return (B = B_grid, L = LOD_grid, SE = SE_grid, h2_null_list = est_h2_per_y)
     end
 
     return (L = LOD_grid, h2_null_list = est_h2_per_y)
@@ -612,6 +614,7 @@ function bulkscan_alt_grid(Y::Array{Float64, 2}, G::Array{Float64, 2},
     L = (logL1 .- logL0_optimum) ./ log(10);
 
     if fixed_effects
+        SE = map((a, b) -> calc_std_err(a, b), L, B)
         return (B = B, L = L, h2_panel = h2_panel);
     end
 

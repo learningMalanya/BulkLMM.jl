@@ -356,6 +356,9 @@ Does element-wise comparisons of two 2d Arrays and keep the larger elements in-p
 # Arguments
 - currMax = 2d Array of Float; matrix of current maximum values
 - toCompare = 2d Array of Float; matrix of values to compare with the current maximum values
+- h2_panel = 2d Array of Float; matrix to store the optimal h2 values for each entry
+- h2_panel_counter = 2d Array of Int; matrix to store the indices of the optimal h2 values for each entry
+- h2_list = 1d Array of Float; list of candidate h2 values
 
 # Value
 

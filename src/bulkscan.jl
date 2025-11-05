@@ -471,7 +471,7 @@ end
 ## of scan_alt() results for each trait.
 ###########################################################
 """
-bulkscan_alt_grid(Y, G, K, hsq_list)
+bulkscan_alt_grid(Y, G, K, h2_list)
 
 Calculates LOD scores for all pairs of traits and markers for each heritability in the supplied list, and returns the 
     maximal LOD scores for each pair among all calculated ones
@@ -480,7 +480,7 @@ Calculates LOD scores for all pairs of traits and markers for each heritability 
 - Y = 2d Array of Float; traits 
 - G = 2d Array of Float; genotype probabilities
 - K = 2d Array of Float; kinship matrix
-- hsq_list = 1d array of Float; the list of heritabilities requested to choose from
+- h2_list = 1d array of Float; the list of heritabilities requested to choose from
 
 # Value
 
@@ -494,7 +494,7 @@ Maximal LOD scores are taken independently for each pair of trait and marker; wh
 
 """
 function bulkscan_alt_grid(Y::Array{Float64, 2}, G::Array{Float64, 2}, K::Array{Float64, 2}, 
-                           hsq_list::Array{Float64, 1};
+                           h2_list::Array{Float64, 1};
                            fixed_effects::Bool = true,
                            reml::Bool = false,
                            prior_variance::Float64 = 1.0, prior_sample_size::Float64 = 0.0, 
@@ -504,7 +504,7 @@ function bulkscan_alt_grid(Y::Array{Float64, 2}, G::Array{Float64, 2}, K::Array{
     n = size(Y, 1);
     intercept = ones(n, 1);
 
-    return bulkscan_alt_grid(Y, G, intercept, K, hsq_list; 
+    return bulkscan_alt_grid(Y, G, intercept, K, h2_list; 
                              fixed_effects = fixed_effects,
                              reml = reml, 
                              prior_variance = prior_variance, prior_sample_size = prior_sample_size, 
@@ -513,7 +513,7 @@ function bulkscan_alt_grid(Y::Array{Float64, 2}, G::Array{Float64, 2}, K::Array{
 end
 
 function bulkscan_alt_grid(Y::Array{Float64, 2}, G::Array{Float64, 2}, 
-                           Covar::Array{Float64, 2}, K::Array{Float64, 2}, hsq_list::Array{Float64, 1};
+                           Covar::Array{Float64, 2}, K::Array{Float64, 2}, h2_list::Array{Float64, 1};
                            fixed_effects::Bool = true,
                            reml::Bool = false,
                            prior_variance::Float64 = 1.0, prior_sample_size::Float64 = 0.0, 
@@ -564,25 +564,33 @@ function bulkscan_alt_grid(Y::Array{Float64, 2}, G::Array{Float64, 2},
     prior = [prior_variance, prior_sample_size];
 
     # Initializing the first iteration of the algorithm on the first h2 value in the grid:
-    logLR = weighted_liteqtl(Y0, X0, lambda0, hsq_list[1]; num_of_covar = num_of_covar).LOD;
+    out_1 = weighted_liteqtl(Y0, X0, lambda0, h2_list[1]; num_of_covar = num_of_covar);
+    logLR = out_1.LOD;
     logLR = logLR .* log(10);
-    weights_1 = makeweights(hsq_list[1], lambda0);
+    B = out_1.B[(num_of_covar+1):end, :]; # Extract only marker effects
+    # println("B size: ", size(B))
+    weights_1 = makeweights(h2_list[1], lambda0);
     logL0 = wls_multivar(Y0, X0_base, weights_1, prior; reml = reml).Ell;
     logL1 = logLR .+ repeat(logL0, p);
 
-    logL0_all_h2 = zeros(length(hsq_list), m);
+    logL0_all_h2 = zeros(length(h2_list), m);
     logL0_all_h2[1, :] = logL0;
     k = 1;
 
-    h2_panel = ones(p, m) .* hsq_list[1]; 
+    h2_panel = ones(p, m) .* h2_list[1]; 
     h2_panel_counter = Int.(ones(p, m));
 
     # Step 1: Obtain maximum loglikelihood values under alternative model, optimized over h2 grid:
-    for h2 in hsq_list[2:end]
+    for h2 in h2_list[2:end]
 
         # Use the LiteQTL (matrix multiplication) approach to compute LOD fastly
         # (based on a given h2 value in the grid)
-        logLR_k = weighted_liteqtl(Y0, X0, lambda0, h2).LOD .* log(10); # Convert LOD to loglik ratio
+        out_k = weighted_liteqtl(Y0, X0, lambda0, h2);
+        ## Extract output of LOD scores and convert to loglik ratio
+        logLR_k = out_k.LOD .* log(10); 
+        ## Extract output of effect sizes
+        B_k = out_k.B;
+
         # Then, we need to recover 
         weights_k = makeweights(h2, lambda0);
         logL0_k = wls_multivar(Y0, X0_base, weights_k, prior; reml = reml).Ell; 
@@ -591,7 +599,10 @@ function bulkscan_alt_grid(Y::Array{Float64, 2}, G::Array{Float64, 2},
         k = k+1;
         logL0_all_h2[k, :] = logL0_k;
 
-        tmax!(logL1, logL1_k, h2_panel, h2_panel_counter, hsq_list);
+        tmax!(logL1, logL1_k, 
+              B, B_k, 
+              h2_panel, h2_panel_counter, 
+              h2_list);
     end
 
     # Step 2: Obtain maximum loglikelihood values under null model, optimized over h2 grid:
@@ -599,6 +610,10 @@ function bulkscan_alt_grid(Y::Array{Float64, 2}, G::Array{Float64, 2},
 
     # Step 3: Calculate LOD scores:
     L = (logL1 .- logL0_optimum) ./ log(10);
+
+    if fixed_effects
+        return (B = B, L = L, h2_panel = h2_panel);
+    end
 
     return (L = L, h2_panel = h2_panel);
 

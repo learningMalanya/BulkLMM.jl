@@ -349,13 +349,15 @@ end
 
 ## MaxBulk helper functions:
 """
-tmax!(max, toCompare)
+tmax!(currL1, nextL1, currB, nextB, h2_panel, h2_panel_counter, h2_list)
 
 Does element-wise comparisons of two 2d Arrays and keep the larger elements in-place. 
 
 # Arguments
-- currMax = 2d Array of Float; matrix of current maximum values
-- toCompare = 2d Array of Float; matrix of values to compare with the current maximum values
+- currL1 = 2d Array of Float; matrix of current maximum l1 (alt-loglik) values over h2 grid
+- nextL1 = 2d Array of Float; matrix of values to compare with the current maximum values
+- currB = 2d Array of Float; matrix to store the effect sizes corresponding to the current maximum l1 values
+- nextB = 2d Array of Float; matrix of effect sizes corresponding to the next L1 values
 - h2_panel = 2d Array of Float; matrix to store the optimal h2 values for each entry
 - h2_panel_counter = 2d Array of Int; matrix to store the indices of the optimal h2 values for each entry
 - h2_list = 1d Array of Float; list of candidate h2 values
@@ -366,27 +368,32 @@ Nothing; does in-place maximizations.
 
 # Notes:
 
-Updates optimal values in `currMax` in-place, in a threaded loop.
+Updates optimal values in `currL1` in-place, in a threaded loop.
 
 """
-function tmax!(currMax::Array{Float64, 2}, toCompare::Array{Float64, 2},
-               h2_panel::Array{Float64, 2}, h2_panel_counter::Array{Int64, 2},
+function tmax!(currL1::Array{Float64, 2}, nextL1::Array{Float64, 2},
+               currB::Array{Float64, 2}, nextB::Array{Float64, 2},  
+               h2_panel::Array{Float64, 2}, 
+               h2_panel_counter::Array{Int64, 2},
                h2_list::Array{Float64, 1})
     
-    (p, m) = size(currMax);
+    (p, m) = size(currL1);
     
     Threads.@threads for j in 1:m # Multiprocessing over traits over threads
         for i in 1:p # Loop over markers
             
-            # Update each LOD score in-place, if current LOD is smaller:
-            if (currMax[i, j] < toCompare[i, j])
+            # Update each l1(i, j) value in-place, if current l1(i, j) is smaller:
+            if (currL1[i, j] < nextL1[i, j])
 
                 # Update new maximum LOD score:
-                currMax[i, j] = toCompare[i, j];
+                currL1[i, j] = nextL1[i, j];
 
                 # Record the new optimal h2 value:
                 h2_panel_counter[i, j] = h2_panel_counter[i, j]+1; # Index of the h2 value in h2_list
                 h2_panel[i, j] = h2_list[h2_panel_counter[i, j]]; # Update the optimal h2 value from indices
+
+                # Also, update the effect sizes based on the new optimal l1:
+                currB[i, j] = nextB[i, j];
             end
 
             # do nothing if not.

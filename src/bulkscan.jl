@@ -355,7 +355,7 @@ function bulkscan_null(Y::Array{Float64, 2}, G::Array{Float64, 2},
                                  reml = reml, optim_interval = optim_interval);
         
         lods_remBlock[:, i] = outputs.R;
-        beta_remBlock[:, i] = outputs.B[2:end];
+        beta_remBlock[:, i] = outputs.B[(num_of_covar+1):end];
         h2_null_list[j] = outputs.h2;
 
     end

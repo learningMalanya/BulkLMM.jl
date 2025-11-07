@@ -320,8 +320,7 @@ function bulkscan_null(Y::Array{Float64, 2}, G::Array{Float64, 2},
                                     prior_variance = prior_variance, prior_sample_size = prior_sample_size,
                                     reml = reml, optim_interval = optim_interval);
 
-            # @inbounds beta_currBlock[:, i] = outputs.B[(num_of_covar+1):end];
-            @inbounds beta_currBlock[:, i] = outputs.B[2:end];
+            @inbounds beta_currBlock[:, i] = outputs.B[(num_of_covar+1):end];
             @inbounds lods_currBlock[:, i] = outputs.R;
             @inbounds h2_null_list[j] = outputs.h2
         end
@@ -355,9 +354,8 @@ function bulkscan_null(Y::Array{Float64, 2}, G::Array{Float64, 2},
                                  prior_variance = prior_variance, prior_sample_size = prior_sample_size,
                                  reml = reml, optim_interval = optim_interval);
         
+        beta_remBlock[:, i] = outputs.B[(num_of_covar+1):end];
         lods_remBlock[:, i] = outputs.R;
-        # beta_remBlock[:, i] = outputs.B[(num_of_covar+1):end];
-        beta_remBlock[:, i] = outputs.B[2:end];
         h2_null_list[j] = outputs.h2;
 
     end

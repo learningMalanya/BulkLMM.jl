@@ -315,7 +315,8 @@ function gridscan_by_bin(pheno::Array{Float64, 2}, geno::Array{Float64, 2},
                                       num_of_covar = num_of_covar);
 
         results[t] = out.LOD;
-        selected_effects = vcat(1, num_of_covar+1:size(out.B, 1)) # baseline (1) + marker (num_of_covar+1:end) effects
+        # selected_effects = vcat(1, (num_of_covar+1):size(out.B, 1)) # baseline (1) + marker (num_of_covar+1:end) effects
+        selected_effects = (num_of_covar+1):size(out.B, 1) # marker effects only
         effect_sizes_by_bin[t] = out.B[selected_effects, :]; # exclude the covariate effects
         # print(size(effect_sizes_by_bin[t]))
 
@@ -334,7 +335,7 @@ function reorder_results(blocking_idxs::Array{Array{Bool, 1}, 1},
                          m::Int64, p::Int64)
     
     LOD = Array{Float64, 2}(undef, p, m);
-    B = Array{Float64, 2}(undef, p+1, m);
+    B = Array{Float64, 2}(undef, p, m);
     
     
     for block in 1:length(blocking_idxs)

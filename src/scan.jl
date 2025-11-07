@@ -432,7 +432,7 @@ function scan_alt(y::Array{Float64, 2}, g::Array{Float64, 2}, covar::Array{Float
 
     lod = zeros(p); # LOD scores
     b = zeros(p); # Fixed marker effect estimates
-    se = zerps(p); # Standard errors of the fixed marker effect estimates
+    se = zeros(p); # Standard errors of the fixed marker effect estimates
 
     X = X0[:, 1:(num_of_covar+1)]
 

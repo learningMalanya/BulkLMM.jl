@@ -404,6 +404,7 @@ A list of output values are returned:
 """
 function scan_alt(y::Array{Float64, 2}, g::Array{Float64, 2}, covar::Array{Float64, 2}, K::Array{Float64, 2}, 
                   prior::Array{Float64, 1}, addIntercept::Bool;
+                  fixed_effects::Bool = true,
                   reml::Bool = false, method::String = "qr", optim_interval::Int64 = 1,
                   decomp_scheme::String = "eigen",
                   # option for returning p-values results:
@@ -429,7 +430,9 @@ function scan_alt(y::Array{Float64, 2}, g::Array{Float64, 2}, covar::Array{Float
     # fit null lmm
     out00 = fitlmm(y0, X0_covar, lambda0, prior; reml = reml, method = method, optim_interval = optim_interval);
 
-    lod = zeros(p);
+    lod = zeros(p); # LOD scores
+    b = zeros(p); # Fixed marker effect estimates
+    se = zeros(p); # Standard errors of the fixed marker effect estimates
 
     X = X0[:, 1:(num_of_covar+1)]
 
@@ -439,22 +442,28 @@ function scan_alt(y::Array{Float64, 2}, g::Array{Float64, 2}, covar::Array{Float
         out11 = fitlmm(y0, X, lambda0, prior; reml = reml, method = method, optim_interval = optim_interval);
        
         # estimate variance components (vc) from the alt. model
-        sqrtw_null = sqrt.(makeweights(out00.h2, lambda0));
+        # sqrtw_null = sqrt.(makeweights(out00.h2, lambda0));
         sqrtw_alt = sqrt.(makeweights(out11.h2, lambda0));
 
         # re-scale both models (null, alt.) and evaluate the ells base on vc from alt. model
-        wls_alt = wls(y0, X, sqrtw_alt, prior);
-        wls_null = wls(y0, X0_covar, sqrtw_null, prior);
-        lod[i] = (wls_alt.ell - wls_null.ell)/log(10);
+        wls_alt = wls(y0, X, sqrtw_alt, prior); # h2 is estimated from alt
+        wls_null = wls(y0, X0_covar, sqrtw_alt, prior); # h2 is also estimated from alt
 
+        # Compute LOD score:
+        lod[i] = (wls_alt.ell - wls_null.ell)/log(10);
+        # Extract and save the estimated marker effect size:
+        b[i] = wls_alt.b[num_of_covar+1];
+        # Compute and save the standard error of the estimated marker effect size:
+        se[i] = calc_std_err(lod[i], b[i]);
+        # Extract and save the estimated h2 under alt. model:
         pve_list[i] = out11.h2;
     end
 
     if output_pvals
         log10pvals = lod2log10p.(lod, chisq_df);
-        return (sigma2_e = out00.sigma2, h2_null = out00.h2, h2_each_marker = pve_list, lod = lod, log10pvals = log10pvals);
+        return (b = b, sigma2_e = out00.sigma2, h2_null = out00.h2, h2_each_marker = pve_list, lod = lod, log10pvals = log10pvals);
     else
-        return (sigma2_e = out00.sigma2, h2_null = out00.h2, h2_each_marker = pve_list, lod = lod);
+        return (b = b, sigma2_e = out00.sigma2, h2_null = out00.h2, h2_each_marker = pve_list, lod = lod);
     end
 
 
@@ -532,6 +541,8 @@ function scan_perms_lite(y::Array{Float64,2}, g::Array{Float64,2}, covar::Array{
                                    prior_b = prior_sample_size, 
                                    reml = reml, method = method, optim_interval = optim_interval); # reweighting and taking residuals
 
+    b = (X00 \ r0) |> vec; # estimate fixed effects
+
     # Compute the matrix of pair-wise correlations between permuted copies and markers:
     r0perm = transform_permute(r0; nperms = nperms, rndseed = rndseed, original = true);
     norm_y = mapslices(x -> norm(x), r0perm, dims = 1) |> vec;
@@ -539,24 +550,29 @@ function scan_perms_lite(y::Array{Float64,2}, g::Array{Float64,2}, covar::Array{
     colDivide!(r0perm, norm_y);
     colDivide!(X00, norm_X);
     L = X00' * r0perm # the matrix of correlations
+
     threaded_map!(r2lod, L, n); # map elementwise-ly to compute LOD scores
 
-    lod = L[:, 1]; # lod scores for the original trait;
+    # LOD scores for the original trait with the markers;
+    lod = L[:, 1]; 
+    # Standard errors of the estimated marker effects
+    se = map((a, b) -> calc_std_err(a, b), lod, b)
+
     L_perms = L[:, 2:end]; # lod scores for the permuted copies of the original, excluding the lod scores for the original trait
 
     if output_pvals
         log10pvals = lod2log10p.(lod, chisq_df);
         if nperms == 0 # if no permutation is required, return results only for the input trait
-            return (sigma2_e = sigma2_e, h2_null = h2_null, lod = lod, log10pvals = log10pvals)
+            return (b = b, sigma2_e = sigma2_e, h2_null = h2_null, lod = lod, log10pvals = log10pvals)
         end
         log10Pvals_perms = lod2log10p.(L_perms, chisq_df);
-        return (sigma2_e = sigma2_e, h2_null = h2_null, lod = lod, log10pvals = log10pvals,
+        return (b = b, sigma2_e = sigma2_e, h2_null = h2_null, lod = lod, log10pvals = log10pvals,
                            L_perms = L_perms, log10Pvals_perms = log10Pvals_perms)
     else
         if nperms == 0 # if no permutation is required, return results only for the input trait
-            return (sigma2_e = sigma2_e, h2_null = h2_null, lod = lod)
+            return (b = b, sigma2_e = sigma2_e, h2_null = h2_null, lod = lod)
         end
-        return (sigma2_e = sigma2_e, h2_null = h2_null, lod = lod, L_perms = L_perms)
+        return (b = b, sigma2_e = sigma2_e, h2_null = h2_null, lod = lod, L_perms = L_perms)
     end
 
 end

@@ -17,7 +17,7 @@ Then, `Results_by_bin` wraps:
 the ĥ² = 0.0 group picks traits (y₁, y₃), then this information is encoded as `[true, false, true, false, false]`, 
 and similarly for the other two groups.
     - `LODs_by_bin`: Array of matrices, with each matrix stores marker associations (LOD scores) of the group of traits 
-(e.g., the first matrix will have two columns, correponding to the LOD scores for y₂, y₃).
+(e.g., the first matrix will have two columns, correponding to the LOD scores for y₁, y₃).
     - `Effect_sizes_by_bin`: Array of matrices, the same data structure as `LODs_by_bin` except that it stores grouped marker effects.
     - `h2_taken`: Array of floats indicating the h² value taken by each group.
 

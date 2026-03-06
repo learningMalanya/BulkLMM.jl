@@ -9,15 +9,15 @@ to reorder the results to match with the original indexing for final reporting.
 Grouped results are in forms of `Array`'s of model outputs for each group. For example, for scanning a total of five traits in 
 the input data, y₁, y₂, y₃, y₄, y₅, suppose that by a BulkLMM grid-search-based method with a simple grid of three values,
 (0.0, 0.5, 0.75). The estimated variance component h² for each trait forms the collection (0.0, 0.5, 0.0, 0.75, 0.5), which
-indicates the grouping as group 1 with (y_1, y_3) corresponding to h² = 0.0, and similarly the other two groups, 
-(y_2, y_5) for  ĥ² = 0.5, (y_4) for ĥ² = 0.75.
+indicates the grouping as group 1 with (y₁, y₃) corresponding to h² = 0.0, and similarly the other two groups, 
+(y₂, y₅) for  ĥ² = 0.5, (y₄) for ĥ² = 0.75.
 
 Then, `Results_by_bin` wraps:
     - `idxs_by_bin`: Array of boolean indicators indicating whether the trait appears in each group. With the given example, 
-the \hat h² = 0.0 group picks traits (y_1, y_3), then this information is encoded as `[true, false, true, false, false]`, 
+the ĥ² = 0.0 group picks traits (y₁, y₃), then this information is encoded as `[true, false, true, false, false]`, 
 and similarly for the other two groups.
     - `LODs_by_bin`: Array of matrices, with each matrix stores marker associations (LOD scores) of the group of traits 
-(e.g., the first matrix will have two columns, correponding to the LOD scores for y_1, y_3).
+(e.g., the first matrix will have two columns, correponding to the LOD scores for y₂, y₃).
     - `Effect_sizes_by_bin`: Array of matrices, the same data structure as `LODs_by_bin` except that it stores grouped marker effects.
     - `h2_taken`: Array of floats indicating the h² value taken by each group.
 
@@ -399,8 +399,8 @@ The function returns a `Results_by_bin` object that stores grouped LOD scores, g
 # Value
     `Results_by_bin`: A struct that stores grouped scan results from the BulkLMM grid-search-based method, including:
     - `idxs_by_bin`: Boolean membership indicators for traits in each heritability bin
-    - `LODs_by_bin`: LOD-score matrices for each bin (markers \times traits-in-bin)
-    - `Effect_sizes_by_bin`: Marker-effect matrices for each bin (markers \times traits-in-bin)
+    - `LODs_by_bin`: LOD-score matrices for each bin (markers × traits-in-bin)
+    - `Effect_sizes_by_bin`: Marker-effect matrices for each bin (markers × traits-in-bin)
     - `h2_taken`: Heritability value assigned to each bin
 
 # Notes
@@ -500,7 +500,7 @@ end
 Reorder grouped BulkLMM scan results back to the original trait order.
 
 `reorder_results` takes LOD-score and marker-effect matrices that are stored by heritability bins (blocks) and reconstructs full 
-`p \times m` matrices whose columns match the original trait indexing. The trait membership of each block is specified 
+`p × m` matrices whose columns match the original trait indexing. The trait membership of each block is specified 
 by the Boolean indicators in `blocking_idxs`.
 
 # Arguments

@@ -7,19 +7,19 @@ Besides model outputs, the struct also records information such as the correpond
 to reorder the results to match with the original indexing for final reporting.
 
 Grouped results are in forms of `Array`'s of model outputs for each group. For example, for scanning a total of five traits in 
-the input data, $(y_1, y_2, y_3, y_4, y_5)$, suppose that by a BulkLMM grid-search-based method with a simple grid of three values,
-$(0.0, 0.5, 0.75)$. The estimated variance component $h^2$ for each trait forms the collection $(0.0, 0.5, 0.0, 0.75, 0.5)$, which
-indicates the grouping as group 1 with $(y_1, y_3)$ corresponding to $\hat h^2 = 0.0$, and similarly the other two groups, 
-$(y_2, y_5)$ for $\hat h^2 = 0.5$, $(y_4)$ for $\hat h^2 = 0.75$.
+the input data, y₁, y₂, y₃, y₄, y₅, suppose that by a BulkLMM grid-search-based method with a simple grid of three values,
+(0.0, 0.5, 0.75). The estimated variance component h² for each trait forms the collection (0.0, 0.5, 0.0, 0.75, 0.5), which
+indicates the grouping as group 1 with (y_1, y_3) corresponding to h² = 0.0, and similarly the other two groups, 
+(y_2, y_5) for  ĥ² = 0.5, (y_4) for ĥ² = 0.75.
 
 Then, `Results_by_bin` wraps:
     - `idxs_by_bin`: Array of boolean indicators indicating whether the trait appears in each group. With the given example, 
-the $\hat h^2 = 0.0$ group picks traits $(y_1, y_3)$, then this information is encoded as `[true, false, true, false, false]`, 
+the \hat h² = 0.0 group picks traits (y_1, y_3), then this information is encoded as `[true, false, true, false, false]`, 
 and similarly for the other two groups.
     - `LODs_by_bin`: Array of matrices, with each matrix stores marker associations (LOD scores) of the group of traits 
-(e.g., the first matrix will have two columns, correponding to the LOD scores for $y_1$, $y_3$).
+(e.g., the first matrix will have two columns, correponding to the LOD scores for y_1, y_3).
     - `Effect_sizes_by_bin`: Array of matrices, the same data structure as `LODs_by_bin` except that it stores grouped marker effects.
-    - `h2_taken`: Array of floats indicating the $h^2$ value taken by each group.
+    - `h2_taken`: Array of floats indicating the h² value taken by each group.
 
 """
 struct Results_by_bin
@@ -64,6 +64,7 @@ the column-wise correlation matrix `R = X00' * Y00`.
     - `wX::Array{Float64, 2}`: Transformed marker matrix (e.g., rotated markers), with columns corresponding to markers
     - `wIntercept::Array{Float64, 2}`: Transformed intercept (can include non-marker covariates) design matrix 
         used to residualize `wY` and `wX`
+        
 
 # Value
     `R::Array{Float64, 2}`: Matrix of Pearson correlations between markers (columns of `wX`) and traits (columns of `wY`) 
@@ -304,7 +305,7 @@ a Boolean vector of length `m` indicating whether each trait index is assigned t
 
 # Notes
 `distribute_traits_by_h2` is a helper function for BulkLMM `Null-Grid` method. It assigns traits sharing the same optimal value 
-    of $h^2$ fitted into the same group. The returned value `ids_each_bin` contains a collection of boolean vectors, each of length 
+    of h² fitted into the same group. The returned value `ids_each_bin` contains a collection of boolean vectors, each of length 
     `m` and indicating whether each trait is in (`true`) or not-in (`false`) the group. 
 
 """
@@ -398,8 +399,8 @@ The function returns a `Results_by_bin` object that stores grouped LOD scores, g
 # Value
     `Results_by_bin`: A struct that stores grouped scan results from the BulkLMM grid-search-based method, including:
     - `idxs_by_bin`: Boolean membership indicators for traits in each heritability bin
-    - `LODs_by_bin`: LOD-score matrices for each bin (markers $\times$ traits-in-bin)
-    - `Effect_sizes_by_bin`: Marker-effect matrices for each bin (markers $\times$ traits-in-bin)
+    - `LODs_by_bin`: LOD-score matrices for each bin (markers \times traits-in-bin)
+    - `Effect_sizes_by_bin`: Marker-effect matrices for each bin (markers \times traits-in-bin)
     - `h2_taken`: Heritability value assigned to each bin
 
 # Notes
@@ -499,7 +500,7 @@ end
 Reorder grouped BulkLMM scan results back to the original trait order.
 
 `reorder_results` takes LOD-score and marker-effect matrices that are stored by heritability bins (blocks) and reconstructs full 
-`p $\times$ m` matrices whose columns match the original trait indexing. The trait membership of each block is specified 
+`p \times m` matrices whose columns match the original trait indexing. The trait membership of each block is specified 
 by the Boolean indicators in `blocking_idxs`.
 
 # Arguments
@@ -570,9 +571,9 @@ and records the updated optimal heritability value in `h2_panel` using `h2_panel
 
 # Notes
 `tmax!` is the core function for BulkLMM "Alt-Grid" method. It essentially computes intermediate outputs, null model profile likelihoods 
-    and pseudo-LOD scores evaluated on each $h^2$ value in the grid, as panel-like data structures (i.e., coordinates corresponding
+    and pseudo-LOD scores evaluated on each h² value in the grid, as panel-like data structures (i.e., coordinates corresponding
     to each trait-marker pair), and then optimizes alternative profile likelihood values in-place by comparing 
-    the two panels `currL1` and `nextL1` corresponding to the current and next $h^2$ value from the grid.
+    the two panels `currL1` and `nextL1` corresponding to the current and next h² value from the grid.
 
     Comparisons between corresponding values across positions are parallelized through threaded operations.
 
